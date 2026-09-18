@@ -5,6 +5,8 @@ company-defined workplace geofences.
 
 - **Employee app** — React Native + Expo (iOS/Android): login, location permissions,
   geofence transition reporting, today status, monthly history.
+- **Employee app (Flutter)** — `apps/mobile_flutter`, a Flutter rewrite of the same
+  employee app against the same Supabase backend (see its README).
 - **Admin dashboard** — Next.js + TypeScript + Tailwind/shadcn: attendance table,
   employees, geofences, holidays, WFH, manual corrections, audit, CSV export.
 - **Backend** — Supabase (Auth + Postgres + RLS + Edge Functions). The OS detects
@@ -16,8 +18,9 @@ company-defined workplace geofences.
 
 ```
 apps/
-  mobile/        Expo employee app
-  admin/         Next.js admin dashboard
+  mobile/          Expo employee app
+  mobile_flutter/  Flutter employee app (same backend)
+  admin/           Next.js admin dashboard
 packages/
   shared/        Types, enums, constants, pure attendance business rules
 supabase/
@@ -69,6 +72,8 @@ States: `PRESENT`, `CHECKED_OUT`, `WFH`, `HOLIDAY`, `LEAVE`, `ABSENT`,
 ```bash
 pnpm -r typecheck     # shared + admin + mobile
 pnpm --filter @geo/admin build
+pnpm test             # engine + RLS SQL suites
+(cd apps/mobile_flutter && flutter analyze && flutter test)
 ```
 
 The attendance state machine (idempotent events, first-check-in-wins, exit grace,
