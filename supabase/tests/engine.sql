@@ -24,6 +24,7 @@ declare
   v_cutoff_message text;
   v_missing_rejected boolean := false;
   v_inactive_rejected boolean := false;
+  v_working_saved integer[];
 begin
   delete from auth.users where id in (v_emp, v_admin);
 
@@ -248,8 +249,12 @@ begin
   perform set_config('request.jwt.claim.sub', v_admin::text, false);
 
   -- 13. Absence finalization respects the cutoff and exception days
-  select absence_cutoff into v_cutoff from public.app_settings where id = 1;
-  update public.app_settings set absence_cutoff = '23:59:59.999999' where id = 1;
+  select absence_cutoff, working_days into v_cutoff, v_working_saved
+    from public.app_settings where id = 1;
+  update public.app_settings
+     set absence_cutoff = '23:59:59.999999',
+         working_days = '{1,2,3,4,5,6,7}'
+   where id = 1;
   begin
     perform public.finalize_absences(v_day);
   exception when sqlstate 'P0001' then
@@ -285,6 +290,17 @@ begin
                  where user_id = v_emp and date = v_day + 3 and status = 'ABSENT') then
     raise exception 'FAIL 13d absence not created';
   end if;
+
+  -- 16. Non-working days are never finalized as absent
+  update public.app_settings
+     set working_days = array[((extract(isodow from (v_day + 9))::int % 7) + 1)]
+   where id = 1;
+  if public.finalize_absences(v_day + 9) <> 0
+     or exists (select 1 from public.attendance
+                where user_id = v_emp and date = v_day + 9 and status = 'ABSENT') then
+    raise exception 'FAIL 16 non-working day finalized as absent';
+  end if;
+  update public.app_settings set working_days = v_working_saved where id = 1;
 
   -- 14. Non-admin cannot correct attendance
   perform set_config('request.jwt.claim.sub', v_emp::text, false);
@@ -322,5 +338,5 @@ begin
     raise exception 'FAIL 15b inactive geofence accepted';
   end if;
 
-  raise notice 'ALL ENGINE TESTS PASSED (21 checks)';
+  raise notice 'ALL ENGINE TESTS PASSED (22 checks)';
 end $$;

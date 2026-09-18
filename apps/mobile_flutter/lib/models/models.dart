@@ -135,6 +135,7 @@ class AppSettings {
     this.absenceCutoff = '12:00',
     this.exitGraceSeconds = 300,
     this.eventRetentionDays = 180,
+    this.workingDays = const [1, 2, 3, 4, 5, 6],
   });
 
   final String companyTimezone;
@@ -144,6 +145,9 @@ class AppSettings {
   final int exitGraceSeconds;
   final int eventRetentionDays;
 
+  /// ISO weekday numbers that count as working days (1=Mon .. 7=Sun).
+  final List<int> workingDays;
+
   factory AppSettings.fromMap(Map<String, dynamic> map) => AppSettings(
         companyTimezone: (map['company_timezone'] as String?) ?? 'Asia/Kolkata',
         workdayStart: (map['workday_start'] as String?) ?? '09:00',
@@ -151,6 +155,9 @@ class AppSettings {
         absenceCutoff: (map['absence_cutoff'] as String?) ?? '12:00',
         exitGraceSeconds: (map['exit_grace_seconds'] as num?)?.toInt() ?? 300,
         eventRetentionDays: (map['event_retention_days'] as num?)?.toInt() ?? 180,
+        workingDays: ((map['working_days'] as List?) ?? const [1, 2, 3, 4, 5, 6])
+            .map((value) => (value as num).toInt())
+            .toList(),
       );
 }
 

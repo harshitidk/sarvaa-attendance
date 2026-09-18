@@ -54,7 +54,7 @@ that violates a standard below is a **regression** and must be fixed.
 - [ ] `pnpm --filter @geo/admin build`
 
 ### B. Engine (SQL)
-- [ ] `pnpm test:engine` → "ALL ENGINE TESTS PASSED (21 checks)"
+- [ ] `pnpm test:engine` → "ALL ENGINE TESTS PASSED (22 checks)"
 
 ### C. RLS (committed: `supabase/tests/rls.sql`, run by `pnpm test:engine`)
 - [ ] admin sees all `users`; employee sees only self

@@ -201,21 +201,25 @@ class AdminApi {
     return AppSettings.fromMap(data ?? const <String, dynamic>{});
   }
 
-  Future<void> updateSettings({
+  /// Returns false when the update was blocked or affected no rows (e.g. RLS).
+  Future<bool> updateSettings({
     required String companyTimezone,
     required String workdayStart,
     required String workdayEnd,
     required String absenceCutoff,
     required int exitGraceSeconds,
     required int eventRetentionDays,
+    required List<int> workingDays,
   }) async {
-    await _client.from('app_settings').update({
+    final result = await _client.from('app_settings').update({
       'company_timezone': companyTimezone,
       'workday_start': workdayStart,
       'workday_end': workdayEnd,
       'absence_cutoff': absenceCutoff,
       'exit_grace_seconds': exitGraceSeconds,
       'event_retention_days': eventRetentionDays,
-    }).eq('id', 1);
+      'working_days': workingDays,
+    }).eq('id', 1).select();
+    return (result as List).isNotEmpty;
   }
 }

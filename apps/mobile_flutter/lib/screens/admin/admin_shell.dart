@@ -11,6 +11,7 @@ import 'dashboard_screen.dart';
 import 'employees_screen.dart';
 import 'exports_screen.dart';
 import 'geofences_screen.dart';
+import 'reports_screen.dart';
 import 'settings_screen.dart';
 
 class AdminSection {
@@ -26,6 +27,8 @@ final List<AdminSection> adminSections = [
       (api, auth) => DashboardScreen(api: api)),
   AdminSection('Attendance', Icons.event_note_outlined,
       (api, auth) => AttendanceScreen(api: api)),
+  AdminSection('Reports', Icons.bar_chart_outlined,
+      (api, auth) => ReportsScreen(api: api)),
   AdminSection('Employees', Icons.people_outline,
       (api, auth) => EmployeesScreen(api: api)),
   AdminSection('Geofences', Icons.map_outlined,
