@@ -1,0 +1,26 @@
+{
+  "name": "geofenced-attendance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Geofenced employee attendance system: Expo mobile app + Next.js admin + Supabase backend.",
+  "scripts": {
+    "dev:admin": "pnpm --filter @geo/admin dev",
+    "dev:mobile": "pnpm --filter @geo/mobile start",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test:engine": "./scripts/test-engine.sh",
+    "test": "pnpm -r typecheck && ./scripts/test-engine.sh",
+    "supabase:start": "supabase start",
+    "supabase:reset": "supabase db reset",
+    "supabase:types": "supabase gen types typescript --local > packages/shared/src/database.types.ts",
+    "db:apply": "./scripts/db-apply.sh"
+  },
+  "devDependencies": {
+    "supabase": "^2.30.4",
+    "typescript": "^5.6.3"
+  },
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

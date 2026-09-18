@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "Geofenced Attendance",
+    "slug": "geofenced-attendance",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "geoattend",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Geofenced Attendance needs background location to record automatic check-in and check-out when you enter or leave your workplace.",
+          "locationAlwaysPermission": "Geofenced Attendance needs background location to record automatic check-in and check-out.",
+          "locationWhenInUsePermission": "Geofenced Attendance uses your location to confirm you are at your workplace.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#2563eb"
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.geoattend",
+      "infoPlist": {
+        "UIBackgroundModes": ["location", "fetch"],
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Geofenced Attendance needs background location to record automatic check-in and check-out.",
+        "NSLocationWhenInUseUsageDescription": "Geofenced Attendance uses your location to confirm you are at your workplace."
+      }
+    },
+    "android": {
+      "package": "com.example.geoattend",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}
