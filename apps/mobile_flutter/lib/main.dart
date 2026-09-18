@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/app_config.dart';
+import 'services/admin_api.dart';
 import 'services/api.dart';
 import 'services/geofencing_service.dart';
 import 'services/notification_service.dart';
@@ -25,9 +26,15 @@ Future<void> main() async {
   );
 
   final api = Api(Supabase.instance.client);
+  final adminApi = AdminApi(Supabase.instance.client);
   final auth = AuthController(api);
   final geofencing = GeofencingService(api);
   await auth.init();
 
-  runApp(GeoAttendApp(api: api, auth: auth, geofencing: geofencing));
+  runApp(GeoAttendApp(
+    api: api,
+    adminApi: adminApi,
+    auth: auth,
+    geofencing: geofencing,
+  ));
 }

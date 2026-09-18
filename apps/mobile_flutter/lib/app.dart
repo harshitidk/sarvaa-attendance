@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'core/theme.dart';
+import 'screens/admin/admin_shell.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/admin_api.dart';
 import 'services/api.dart';
 import 'services/geofencing_service.dart';
 import 'state/auth_controller.dart';
@@ -13,11 +15,13 @@ class GeoAttendApp extends StatelessWidget {
   const GeoAttendApp({
     super.key,
     required this.api,
+    required this.adminApi,
     required this.auth,
     required this.geofencing,
   });
 
   final Api api;
+  final AdminApi adminApi;
   final AuthController auth;
   final GeofencingService geofencing;
 
@@ -32,6 +36,9 @@ class GeoAttendApp extends StatelessWidget {
         builder: (context, _) {
           if (auth.loading) return const _Splash();
           if (!auth.isSignedIn) return LoginScreen(auth: auth);
+          if (auth.profile?.role == 'admin') {
+            return AdminShell(api: adminApi, auth: auth);
+          }
           return MainShell(api: api, auth: auth, geofencing: geofencing);
         },
       ),
