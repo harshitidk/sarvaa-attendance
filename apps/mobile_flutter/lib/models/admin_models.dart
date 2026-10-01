@@ -1,3 +1,5 @@
+import 'models.dart';
+
 DateTime? _date(dynamic value) {
   if (value == null) return null;
   if (value is DateTime) return value;
@@ -19,6 +21,7 @@ class AttendanceRow {
     this.checkOutAt,
     this.totalDurationSeconds,
     this.workSummary,
+    this.sessions = const [],
   });
 
   final String id;
@@ -33,6 +36,9 @@ class AttendanceRow {
   final DateTime? checkOutAt;
   final int? totalDurationSeconds;
   final String? workSummary;
+  final List<AttendanceSession> sessions;
+
+  int get visitCount => sessions.length;
 
   factory AttendanceRow.fromMap(Map<String, dynamic> map) {
     final user = (map['user'] as Map<String, dynamic>?) ?? const {};
@@ -49,6 +55,9 @@ class AttendanceRow {
       checkOutAt: _date(map['check_out_at']),
       totalDurationSeconds: (map['total_duration_seconds'] as num?)?.toInt(),
       workSummary: map['work_summary'] as String?,
+      sessions: ((map['sessions'] as List?) ?? const [])
+          .map((row) => AttendanceSession.fromMap(row as Map<String, dynamic>))
+          .toList(),
     );
   }
 }
@@ -63,6 +72,7 @@ class EmployeeRow {
     required this.status,
     this.department,
     this.locationId,
+    this.attendanceEnabled = false,
   });
 
   final String id;
@@ -74,6 +84,9 @@ class EmployeeRow {
   final String? department;
   final String? locationId;
 
+  /// Employees are always tracked; admins opt in.
+  final bool attendanceEnabled;
+
   factory EmployeeRow.fromMap(Map<String, dynamic> map) => EmployeeRow(
         id: map['id'] as String,
         employeeId: (map['employee_id'] as String?) ?? '',
@@ -83,6 +96,7 @@ class EmployeeRow {
         status: (map['status'] as String?) ?? 'active',
         department: map['department'] as String?,
         locationId: map['location_id'] as String?,
+        attendanceEnabled: (map['attendance_enabled'] as bool?) ?? false,
       );
 }
 
@@ -177,5 +191,120 @@ class AuditRow {
         entityType: (map['entity_type'] as String?) ?? '',
         createdAt: _date(map['created_at']) ?? DateTime.now(),
         entityId: map['entity_id'] as String?,
+      );
+}
+
+/// A WFH request joined with the employee who filed it.
+class WfhRequestRow {
+  const WfhRequestRow({
+    required this.id,
+    required this.userId,
+    required this.date,
+    required this.status,
+    required this.createdAt,
+    this.reason,
+    this.decisionNote,
+    this.employeeName = '',
+    this.employeeCode = '',
+    this.reviewedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String date;
+  final String status;
+  final DateTime createdAt;
+  final String? reason;
+  final String? decisionNote;
+  final String employeeName;
+  final String employeeCode;
+  final DateTime? reviewedAt;
+
+  bool get isPending => status == 'pending';
+
+  factory WfhRequestRow.fromMap(Map<String, dynamic> map) {
+    final user = (map['user'] as Map<String, dynamic>?) ?? const {};
+    return WfhRequestRow(
+      id: map['id'] as String,
+      userId: (map['user_id'] as String?) ?? '',
+      date: (map['date'] as String?) ?? '',
+      status: (map['status'] as String?) ?? 'pending',
+      createdAt: _date(map['created_at']) ?? DateTime.now(),
+      reason: map['reason'] as String?,
+      decisionNote: map['decision_note'] as String?,
+      employeeName: (user['name'] as String?) ?? '',
+      employeeCode: (user['employee_id'] as String?) ?? '',
+      reviewedAt: _date(map['reviewed_at']),
+    );
+  }
+}
+
+/// A leave request joined with the employee who filed it.
+class LeaveRequestRow {
+  const LeaveRequestRow({
+    required this.id,
+    required this.userId,
+    required this.date,
+    required this.leaveType,
+    required this.status,
+    required this.createdAt,
+    this.reason,
+    this.decisionNote,
+    this.employeeName = '',
+    this.employeeCode = '',
+    this.reviewedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String date;
+  final LeaveType leaveType;
+  final String status;
+  final DateTime createdAt;
+  final String? reason;
+  final String? decisionNote;
+  final String employeeName;
+  final String employeeCode;
+  final DateTime? reviewedAt;
+
+  bool get isPending => status == 'pending';
+
+  factory LeaveRequestRow.fromMap(Map<String, dynamic> map) {
+    final user = (map['user'] as Map<String, dynamic>?) ?? const {};
+    return LeaveRequestRow(
+      id: map['id'] as String,
+      userId: (map['user_id'] as String?) ?? '',
+      date: (map['date'] as String?) ?? '',
+      leaveType: LeaveType.fromValue(map['leave_type'] as String?),
+      status: (map['status'] as String?) ?? 'pending',
+      createdAt: _date(map['created_at']) ?? DateTime.now(),
+      reason: map['reason'] as String?,
+      decisionNote: map['decision_note'] as String?,
+      employeeName: (user['name'] as String?) ?? '',
+      employeeCode: (user['employee_id'] as String?) ?? '',
+      reviewedAt: _date(map['reviewed_at']),
+    );
+  }
+}
+
+/// A date the whole company works from home.
+class CompanyWfhDay {
+  const CompanyWfhDay({
+    required this.id,
+    required this.date,
+    this.note,
+    this.locationId,
+  });
+
+  final String id;
+  final String date;
+  final String? note;
+  final String? locationId;
+
+  factory CompanyWfhDay.fromMap(Map<String, dynamic> map) => CompanyWfhDay(
+        id: map['id'] as String,
+        date: (map['date'] as String?) ?? '',
+        note: map['note'] as String?,
+        locationId: map['location_id'] as String?,
       );
 }

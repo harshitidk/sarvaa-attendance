@@ -6,6 +6,16 @@ import '../../services/admin_api.dart';
 import '../../utils/attendance_logic.dart';
 import '../../widgets/common.dart';
 
+const _correctableStatuses = [
+  'PRESENT',
+  'CHECKED_OUT',
+  'WFH',
+  'HOLIDAY',
+  'LEAVE',
+  'ABSENT',
+  'MANUAL_OVERRIDE',
+];
+
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key, required this.api});
 
@@ -18,7 +28,10 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> {
   late DateTime _from = DateTime.now().subtract(const Duration(days: 30));
   late DateTime _to = DateTime.now();
+  final _search = TextEditingController();
   List<AttendanceRow> _rows = const [];
+  String _timezone = 'Asia/Kolkata';
+  String _query = '';
   bool _loading = true;
   String? _error;
 
@@ -28,8 +41,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     _load();
   }
 
-  String _iso(DateTime date) =>
-      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
 
   Future<void> _load() async {
     setState(() {
@@ -37,9 +54,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       _error = null;
     });
     try {
-      final rows = await widget.api.fetchAttendanceRange(_iso(_from), _iso(_to));
+      final settings = await widget.api.fetchSettings();
+      final rows = await widget.api.fetchAttendanceRange(isoDate(_from), isoDate(_to));
       if (!mounted) return;
       setState(() {
+        _timezone = settings.companyTimezone;
         _rows = rows;
         _loading = false;
       });
@@ -52,7 +71,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
-  Future<void> _pickDate({required bool isFrom}) async {
+  Future<void> _pick(bool isFrom) async {
     final picked = await showDatePicker(
       context: context,
       initialDate: isFrom ? _from : _to,
@@ -70,137 +89,266 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     await _load();
   }
 
+  List<AttendanceRow> get _visible {
+    if (_query.trim().isEmpty) return _rows;
+    final needle = _query.trim().toLowerCase();
+    return _rows
+        .where((row) =>
+            row.employeeName.toLowerCase().contains(needle) ||
+            row.employeeCode.toLowerCase().contains(needle) ||
+            (row.department ?? '').toLowerCase().contains(needle))
+        .toList();
+  }
+
   Future<void> _correct(AttendanceRow row) async {
-    final reason = TextEditingController();
-    var status = row.status;
-    final applied = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.card,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: StatefulBuilder(
-          builder: (context, setSheetState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Correct ${row.employeeName}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(row.date, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: status,
-                decoration: const InputDecoration(labelText: 'Status'),
-                items: const [
-                  'PRESENT',
-                  'CHECKED_OUT',
-                  'WFH',
-                  'HOLIDAY',
-                  'LEAVE',
-                  'ABSENT',
-                  'MANUAL_OVERRIDE',
-                ]
-                    .map((value) => DropdownMenuItem(value: value, child: Text(value)))
-                    .toList(),
-                onChanged: (value) => setSheetState(() => status = value ?? status),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reason,
-                decoration: const InputDecoration(
-                  labelText: 'Reason (required)',
-                  hintText: 'e.g. Device GPS failed',
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () async {
-                        final text = reason.text.trim();
-                        if (text.length < 3) return;
-                        await widget.api.applyManualCorrection(
-                          attendanceId: row.id,
-                          status: status,
-                          reason: text,
-                        );
-                        if (context.mounted) Navigator.of(context).pop(true);
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+    final applied = await showAppSheet<bool>(
+      context,
+      builder: (context) => _CorrectionSheet(api: widget.api, row: row),
     );
-    reason.dispose();
-    if (applied == true) await _load();
+    if (applied == true) {
+      await _load();
+      if (mounted) showToast(context, 'Correction applied');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final rows = _visible;
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
+          padding: AppPadding.bar,
+          child: Column(
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _pickDate(isFrom: true),
-                  child: Text('From ${_iso(_from)}'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _pickDate(isFrom: false),
-                  child: Text('To ${_iso(_to)}'),
-                ),
+              DateRangeBar(from: _from, to: _to, onPick: _pick),
+              const SizedBox(height: Insets.md),
+              SearchField(
+                controller: _search,
+                hintText: 'Search name, ID or department',
+                onChanged: (value) => setState(() => _query = value),
               ),
             ],
           ),
         ),
         Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-                  ? Center(child: Text(_error!))
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: _rows.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final row = _rows[index];
-                        return ListTile(
-                          title: Text(row.employeeName.isEmpty ? row.userId : row.employeeName),
-                          subtitle: Text(
-                            '${row.date} · ${formatTime(row.checkInAt, 'Asia/Kolkata')} → '
-                            '${formatTime(row.checkOutAt, 'Asia/Kolkata')}',
-                          ),
-                          trailing: StatusBadge(status: row.status),
-                          onTap: () => _correct(row),
-                        );
-                      },
-                    ),
+          child: ScreenState(
+            loading: _loading,
+            error: _error,
+            onRetry: _load,
+            child: rows.isEmpty
+                ? EmptyState(
+                    icon: Icons.event_busy_outlined,
+                    title: _query.isEmpty
+                        ? 'No records in this range'
+                        : 'No match for "$_query"',
+                    message: _query.isEmpty
+                        ? 'Widen the date range to see more.'
+                        : 'Try a different name, employee ID or department.',
+                  )
+                : Refreshable(
+                    onRefresh: _load,
+                    child: ListView.separated(
+                    padding: AppPadding.pageBelowBar,
+                    itemCount: rows.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: Insets.sm),
+                    itemBuilder: (context, index) {
+                      final row = rows[index];
+                      return _AttendanceCard(
+                        row: row,
+                        timezone: _timezone,
+                        onTap: () => _correct(row),
+                      );
+                    },
+                  ),
+                  ),
+          ),
         ),
+      ],
+    );
+  }
+}
+
+class _AttendanceCard extends StatelessWidget {
+  const _AttendanceCard({
+    required this.row,
+    required this.timezone,
+    required this.onTap,
+  });
+
+  final AttendanceRow row;
+  final String timezone;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(Radii.md),
+      child: Container(
+        padding: const EdgeInsets.all(Insets.lg),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(Radii.md),
+          border: Border.all(color: AppColors.hairline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        row.employeeName.isEmpty ? row.userId : row.employeeName,
+                        style: AppText.subhead,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        formatBusinessDate(row.date, 'EEE, d MMM'),
+                        style: AppText.bodySm.copyWith(fontSize: 12.5),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: Insets.md),
+                StatusBadge(status: row.status, compact: true),
+              ],
+            ),
+            const SizedBox(height: Insets.md),
+            Row(
+              children: [
+                Text(
+                  '${formatTime(row.checkInAt, timezone)}'
+                  '  –  ${formatTime(row.checkOutAt, timezone)}',
+                  style: AppText.numeral.copyWith(fontSize: 13.5),
+                ),
+                const Spacer(),
+                Text(
+                  formatDuration(row.totalDurationSeconds),
+                  style: AppText.bodySm.copyWith(fontSize: 12.5),
+                ),
+              ],
+            ),
+            if (row.visitCount > 1) ...[
+              const SizedBox(height: Insets.sm),
+              Text(
+                '${row.visitCount} visits · ${row.sessions.map((s) => '${formatTime(s.checkInAt, timezone)}–${formatTime(s.checkOutAt, timezone)}').join(', ')}',
+                style: AppText.bodySm.copyWith(fontSize: 12),
+              ),
+            ],
+            if (row.workSummary != null && row.workSummary!.trim().isNotEmpty) ...[
+              const SizedBox(height: Insets.md),
+              Text(
+                row.workSummary!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.bodySm.copyWith(fontSize: 12.5),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Manual correction. The reason is mandatory — it is what the audit log keeps.
+class _CorrectionSheet extends StatefulWidget {
+  const _CorrectionSheet({required this.api, required this.row});
+
+  final AdminApi api;
+  final AttendanceRow row;
+
+  @override
+  State<_CorrectionSheet> createState() => _CorrectionSheetState();
+}
+
+class _CorrectionSheetState extends State<_CorrectionSheet> {
+  final _reason = TextEditingController();
+  late String _status = widget.row.status;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final reason = _reason.text.trim();
+    if (reason.length < 3) {
+      setState(() => _error = 'Give a reason — it is recorded in the audit log.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.api.applyManualCorrection(
+        attendanceId: widget.row.id,
+        status: _status,
+        reason: reason,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = error.toString();
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SheetShell(
+      title: widget.row.employeeName.isEmpty
+          ? 'Correct record'
+          : 'Correct ${widget.row.employeeName}',
+      subtitle: formatBusinessDate(widget.row.date, 'EEEE, d MMMM y'),
+      primaryLabel: 'Apply correction',
+      onPrimary: _save,
+      busy: _busy,
+      children: [
+        const FieldLabel('Status'),
+        Wrap(
+          spacing: Insets.sm,
+          runSpacing: Insets.sm,
+          children: [
+            for (final status in _correctableStatuses)
+              ChoiceChip(
+                label: Text(statusLabel(status)),
+                selected: _status == status,
+                onSelected: _busy ? null : (_) => setState(() => _status = status),
+              ),
+          ],
+        ),
+        const SizedBox(height: Insets.xl),
+        const FieldLabel('Reason', hint: 'Stored with the old and new values.'),
+        TextField(
+          controller: _reason,
+          enabled: !_busy,
+          maxLines: 2,
+          textCapitalization: TextCapitalization.sentences,
+          onChanged: (_) {
+            if (_error != null) setState(() => _error = null);
+          },
+          decoration: const InputDecoration(
+            hintText: 'Device GPS failed; confirmed with the team lead.',
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: Insets.md),
+          Notice(_error!, tone: NoticeTone.alert),
+        ],
       ],
     );
   }

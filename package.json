@@ -13,7 +13,8 @@
     "supabase:start": "supabase start",
     "supabase:reset": "supabase db reset",
     "supabase:types": "supabase gen types typescript --local > packages/shared/src/database.types.ts",
-    "db:apply": "./scripts/db-apply.sh"
+    "db:apply": "./scripts/db-apply.sh",
+    "build:mobile": "./scripts/build-mobile.sh"
   },
   "devDependencies": {
     "supabase": "^2.30.4",

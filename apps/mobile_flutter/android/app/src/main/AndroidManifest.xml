@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
     <application
-        android:label="Geofenced Attendance"
+        android:label="Sarvaa Analytics"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

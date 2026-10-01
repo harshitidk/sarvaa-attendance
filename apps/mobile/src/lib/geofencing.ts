@@ -32,12 +32,28 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }) => {
   const occurredAt = new Date().toISOString();
   const dedupeKey = `${region.identifier}:${type}:${Math.floor(Date.now() / 60000)}`;
 
+  // The server verifies presence, so report the device's coordinates with the
+  // transition. A missing fix means the check-in is refused server-side.
+  let coords: { latitude: number; longitude: number; accuracy: number | null } | null = null;
+  try {
+    const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    coords = {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy ?? null,
+    };
+  } catch {
+    coords = null;
+  }
+
   try {
     const { data: result, error: rpcError } = await supabase.rpc("record_location_event", {
       p_geofence_id: region.identifier,
       p_event_type: type,
       p_occurred_at: occurredAt,
-      p_accuracy_meters: null,
+      p_accuracy_meters: coords?.accuracy ?? null,
+      p_latitude: coords?.latitude ?? null,
+      p_longitude: coords?.longitude ?? null,
       p_dedupe_key: dedupeKey,
       p_source: "OS geofence",
       p_metadata: { platform: "expo-location", occurredAtSource: "delivery" },

@@ -70,5 +70,7 @@ run_suite() {
 
 run_suite "$ROOT/supabase/tests/engine.sql" 'ALL ENGINE TESTS PASSED' "engine tests"
 run_suite "$ROOT/supabase/tests/rls.sql" 'ALL RLS TESTS PASSED' "RLS tests"
+run_suite "$ROOT/supabase/tests/wfh.sql" 'ALL WFH TESTS PASSED' "WFH request tests"
+run_suite "$ROOT/supabase/tests/leave.sql" 'ALL LEAVE TESTS PASSED' "leave request tests"
 
 echo "Engine tests passed."

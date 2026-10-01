@@ -47,6 +47,12 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  /// Re-reads the profile (e.g. after toggling attendance tracking).
+  Future<void> refreshProfile() async {
+    await _loadProfile();
+    notifyListeners();
+  }
+
   Future<String?> signIn(String email, String password) async {
     try {
       await Supabase.instance.client.auth

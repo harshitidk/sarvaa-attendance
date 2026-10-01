@@ -1,4 +1,4 @@
-package com.example.geoattend.geoattend
+package `in`.co.sarvaa.attendance
 
 import io.flutter.embedding.android.FlutterActivity
 

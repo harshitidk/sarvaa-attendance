@@ -14,7 +14,6 @@ update public.app_settings
    set company_timezone   = 'Asia/Kolkata',
        workday_start      = '09:00',
        workday_end        = '18:00',
-       absence_cutoff     = '12:00',
        exit_grace_seconds = 300
  where id = 1;
 

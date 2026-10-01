@@ -15,9 +15,12 @@ class GeofencingService {
   final Api _api;
 
   final gs.GeofenceService _service = gs.GeofenceService.instance.setup(
-    interval: 5000,
+    // Battery-conscious: geofences are checked about once a minute and a
+    // transition is confirmed after a short delay, which is ample for an office
+    // visit and avoids waking the radio every few seconds.
+    interval: 60000,
     accuracy: 100,
-    statusChangeDelayMs: 10000,
+    statusChangeDelayMs: 30000,
     useActivityRecognition: true,
     allowMockLocations: false,
     printDevLog: false,
@@ -73,6 +76,7 @@ class GeofencingService {
     gs.Location location,
   ) async {
     if (status == gs.GeofenceStatus.DWELL) return;
+    if (location.isMock) return; // never trust a mocked fix
     final eventType = status == gs.GeofenceStatus.ENTER ? 'ENTER' : 'EXIT';
     try {
       await _api.recordLocationEvent(
@@ -80,6 +84,8 @@ class GeofencingService {
         eventType: eventType,
         occurredAt: DateTime.now().toUtc(),
         accuracyMeters: location.accuracy,
+        latitude: location.latitude,
+        longitude: location.longitude,
         source: 'OS geofence',
         metadata: const {
           'platform': 'flutter',

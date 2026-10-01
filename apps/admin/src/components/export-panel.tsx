@@ -56,7 +56,7 @@ export function ExportPanel({ defaultFrom, defaultTo }: { defaultFrom: string; d
       } else if (type === "wfh") {
         const { data, error: e } = await supabase
           .from("wfh_assignments")
-          .select("date, reason, user:users(employee_id, name)")
+          .select("date, reason, user:users!wfh_assignments_user_id_fkey(employee_id, name)")
           .gte("date", from)
           .lte("date", to)
           .order("date");

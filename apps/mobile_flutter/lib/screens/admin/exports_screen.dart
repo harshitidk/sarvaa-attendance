@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../models/admin_models.dart';
 import '../../services/admin_api.dart';
 import '../../utils/attendance_logic.dart';
+import '../../widgets/common.dart';
 
 class ExportsScreen extends StatefulWidget {
   const ExportsScreen({super.key, required this.api});
@@ -18,13 +19,29 @@ class ExportsScreen extends StatefulWidget {
 class _ExportsScreenState extends State<ExportsScreen> {
   late DateTime _from = DateTime.now().subtract(const Duration(days: 30));
   late DateTime _to = DateTime.now();
+  String _timezone = 'Asia/Kolkata';
   bool _busy = false;
   String? _error;
 
-  String _iso(DateTime date) =>
-      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  @override
+  void initState() {
+    super.initState();
+    _loadTimezone();
+  }
 
-  Future<void> _pick({required bool isFrom}) async {
+  /// Exported times must match what the company sees in the app, not a
+  /// hard-coded zone.
+  Future<void> _loadTimezone() async {
+    try {
+      final settings = await widget.api.fetchSettings();
+      if (mounted) setState(() => _timezone = settings.companyTimezone);
+    } catch (_) {
+      // Falls back to the default; the export still works.
+    }
+  }
+
+
+  Future<void> _pick(bool isFrom) async {
     final picked = await showDatePicker(
       context: context,
       initialDate: isFrom ? _from : _to,
@@ -41,20 +58,26 @@ class _ExportsScreenState extends State<ExportsScreen> {
     });
   }
 
+  String _escape(String value) {
+    final cleaned = value.replaceAll('\n', ' ').replaceAll('"', '""');
+    return cleaned.contains(',') ? '"$cleaned"' : cleaned;
+  }
+
   String _csv(List<AttendanceRow> rows) {
     final buffer = StringBuffer()
-      ..writeln('date,employee_id,name,department,status,check_in,check_out,duration_seconds,work_summary,source');
+      ..writeln('date,employee_id,name,department,status,check_in,check_out,'
+          'duration_seconds,work_summary,source');
     for (final row in rows) {
       buffer.writeln([
         row.date,
-        row.employeeCode,
-        row.employeeName,
-        row.department ?? '',
+        _escape(row.employeeCode),
+        _escape(row.employeeName),
+        _escape(row.department ?? ''),
         row.status,
-        formatTime(row.checkInAt, 'Asia/Kolkata'),
-        formatTime(row.checkOutAt, 'Asia/Kolkata'),
+        _escape(formatTime(row.checkInAt, _timezone)),
+        _escape(formatTime(row.checkOutAt, _timezone)),
         row.totalDurationSeconds ?? '',
-        (row.workSummary ?? '').replaceAll('\n', ' ').replaceAll(',', ';'),
+        _escape(row.workSummary ?? ''),
         row.source,
       ].join(','));
     }
@@ -67,17 +90,17 @@ class _ExportsScreenState extends State<ExportsScreen> {
       _error = null;
     });
     try {
-      final rows = await widget.api.fetchAttendanceRange(_iso(_from), _iso(_to));
+      final rows = await widget.api.fetchAttendanceRange(isoDate(_from), isoDate(_to));
       if (rows.isEmpty) {
         setState(() {
-          _error = 'No records in that range.';
+          _error = 'No records in that range. Widen the dates and try again.';
           _busy = false;
         });
         return;
       }
       await SharePlus.instance.share(
         ShareParams(
-          subject: 'Attendance ${_iso(_from)} to ${_iso(_to)}',
+          subject: 'Attendance ${isoDate(_from)} to ${isoDate(_to)}',
           text: _csv(rows),
         ),
       );
@@ -93,40 +116,36 @@ class _ExportsScreenState extends State<ExportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final days = _to.difference(_from).inDays + 1;
+
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: AppPadding.page,
       children: [
-        const Text(
-          'Export attendance as CSV. Choose a range, then share the file.',
-          style: TextStyle(color: AppColors.muted, fontSize: 13),
+        const ScreenCaption('Download attendance as CSV and share it anywhere.'),
+        const Eyebrow('Date range'),
+        const SizedBox(height: Insets.sm),
+        DateRangeBar(from: _from, to: _to, onPick: _pick),
+        const SizedBox(height: Insets.lg),
+        SectionCard(
+          title: 'What you will get',
+          child: Column(
+            children: [
+              DetailRow('Period', '$days day${days == 1 ? '' : 's'}', dense: true),
+              DetailRow('Times in', _timezone, dense: true),
+              const DetailRow('Format', 'CSV, 10 columns', dense: true),
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
-        OutlinedButton(
-          onPressed: () => _pick(isFrom: true),
-          child: Text('From ${_iso(_from)}'),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton(
-          onPressed: () => _pick(isFrom: false),
-          child: Text('To ${_iso(_to)}'),
-        ),
-        const SizedBox(height: 20),
-        FilledButton(
-          onPressed: _busy ? null : _export,
-          child: _busy
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primaryForeground,
-                  ),
-                )
-              : const Text('Export CSV'),
+        const SizedBox(height: Insets.xl),
+        BusyButton(
+          label: 'Export CSV',
+          icon: Icons.ios_share_rounded,
+          busy: _busy,
+          onPressed: _export,
         ),
         if (_error != null) ...[
-          const SizedBox(height: 12),
-          Text(_error!, style: const TextStyle(color: AppColors.danger)),
+          const SizedBox(height: Insets.lg),
+          Notice(_error!, tone: NoticeTone.alert),
         ],
       ],
     );

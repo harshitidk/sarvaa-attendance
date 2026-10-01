@@ -76,6 +76,8 @@ export async function recordLocationEvent(params: {
   eventType: "ENTER" | "EXIT";
   occurredAt?: string;
   accuracyMeters?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
   dedupeKey?: string;
   source?: string;
   metadata?: Record<string, unknown>;
@@ -86,6 +88,8 @@ export async function recordLocationEvent(params: {
     p_event_type: params.eventType,
     p_occurred_at: occurredAt,
     p_accuracy_meters: params.accuracyMeters ?? null,
+    p_latitude: params.latitude ?? null,
+    p_longitude: params.longitude ?? null,
     p_dedupe_key: params.dedupeKey ?? `mobile:${params.geofenceId}:${params.eventType}:${occurredAt}`,
     p_source: params.source ?? "Mobile geolocation",
     p_metadata: params.metadata ?? {},

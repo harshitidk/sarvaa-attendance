@@ -5,8 +5,8 @@ import '../core/theme.dart';
 import '../models/models.dart';
 import '../services/api.dart';
 import '../state/auth_controller.dart';
-import '../utils/attendance_logic.dart';
 import '../widgets/common.dart';
+import '../widgets/month_calendar.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key, required this.api, required this.auth});
@@ -19,13 +19,11 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  static const _weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
   DateTime _cursor = DateTime(DateTime.now().year, DateTime.now().month);
   List<Attendance> _records = const [];
-  Attendance? _selected;
   String _timezone = 'Asia/Kolkata';
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -36,165 +34,198 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _load() async {
     final userId = widget.auth.session?.user.id;
     if (userId == null) return;
-    setState(() => _loading = true);
-    final settings = await widget.api.fetchAppSettings();
-    final records = await widget.api.fetchMonthAttendance(
-      userId,
-      _cursor.year,
-      _cursor.month,
-    );
-    if (!mounted) return;
     setState(() {
-      _timezone = settings.companyTimezone;
-      _records = records;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final settings = await widget.api.fetchAppSettings();
+      final records = await widget.api.fetchMonthAttendance(
+        userId,
+        _cursor.year,
+        _cursor.month,
+      );
+      if (!mounted) return;
+      setState(() {
+        _timezone = settings.companyTimezone;
+        _records = records;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  bool get _atCurrentMonth {
+    final now = DateTime.now();
+    return _cursor.year == now.year && _cursor.month == now.month;
   }
 
   void _shift(int delta) {
-    setState(() {
-      _selected = null;
-      _cursor = DateTime(_cursor.year, _cursor.month + delta);
-    });
+    if (delta > 0 && _atCurrentMonth) return;
+    setState(() => _cursor = DateTime(_cursor.year, _cursor.month + delta));
     _load();
+  }
+
+  int _countOf(Set<String> statuses) =>
+      _records.where((record) => statuses.contains(record.status)).length;
+
+  void _openDay(Attendance record) {
+    showDayDetailSheet(context, record, _timezone);
   }
 
   @override
   Widget build(BuildContext context) {
-    final byDate = {for (final record in _records) record.date: record};
-    final first = DateTime(_cursor.year, _cursor.month, 1);
-    final daysInMonth = DateTime(_cursor.year, _cursor.month + 1, 0).day;
-    final startOffset = (first.weekday - DateTime.monday) % 7;
-    final today = businessDate(DateTime.now().toUtc(), _timezone);
-    final cells = <int?>[
-      ...List<int?>.filled(startOffset, null),
-      ...List<int?>.generate(daysInMonth, (index) => index + 1),
-    ];
-    while (cells.length % 7 != 0) {
-      cells.add(null);
-    }
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            IconButton(onPressed: () => _shift(-1), icon: const Icon(Icons.chevron_left)),
-            Text(
-              DateFormat('MMMM yyyy').format(_cursor),
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-            ),
-            IconButton(onPressed: () => _shift(1), icon: const Icon(Icons.chevron_right)),
-          ],
-        ),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else ...[
-          Row(
-            children: _weekdays
-                .map(
-                  (day) => Expanded(
-                    child: Center(
-                      child: Text(
-                        day,
-                        style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
+    return Refreshable(
+        onRefresh: _load,
+        child: ListView(
+        padding: AppPadding.page,
+        children: [
+          const PageHeader(
+            title: 'History',
+            subtitle: 'Tap any day to see the detail.',
           ),
-          const SizedBox(height: 8),
-          GridView.count(
-            crossAxisCount: 7,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: cells.map((day) {
-              if (day == null) return const SizedBox.shrink();
-              final key =
-                  '${_cursor.year}-${_cursor.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
-              final record = byDate[key];
-              final tone = toneFor(record?.status);
-              final isToday = key == today;
-              return GestureDetector(
-                onTap: record == null ? null : () => setState(() => _selected = record),
-                child: Container(
-                  margin: const EdgeInsets.all(2),
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: record == null ? null : tone.background,
-                    borderRadius: BorderRadius.circular(8),
-                    border: isToday ? Border.all(color: AppColors.primary) : null,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '$day',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: record == null ? AppColors.foreground : tone.foreground,
-                        ),
-                      ),
-                      if (record != null)
-                        Text(
-                          record.status.replaceAll('_', ' '),
-                          maxLines: 1,
-                          overflow: TextOverflow.clip,
-                          style: TextStyle(fontSize: 7, color: tone.foreground),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-          if (_selected == null)
-            const Text(
-              'Tap a day to see check-in, check-out and duration.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.muted, fontSize: 13),
+          _monthBar(),
+          const SizedBox(height: Insets.lg),
+          if (_loading)
+            const _CalendarSkeleton()
+          else if (_error != null)
+            EmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'Could not load history',
+              message: _error,
+              actionLabel: 'Try again',
+              onAction: _load,
             )
-          else
-            SectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_selected!.date, style: const TextStyle(color: AppColors.muted)),
-                  const SizedBox(height: 4),
-                  StatusBadge(status: _selected!.status),
-                  const SizedBox(height: 12),
-                  _detail('Check-in', formatTime(_selected!.checkInAt, _timezone)),
-                  _detail('Check-out', formatTime(_selected!.checkOutAt, _timezone)),
-                  _detail('Duration', formatDuration(_selected!.totalDurationSeconds)),
-                  _detail(
-                    'Source',
-                    _selected!.source == 'manual' ? 'Admin correction' : 'Automatic',
-                  ),
-                ],
+          else ...[
+            _summary(),
+            const SizedBox(height: Insets.lg),
+            _calendar(),
+            const SizedBox(height: Insets.lg),
+            _legend(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _monthBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(Radii.md),
+        border: Border.all(color: AppColors.hairline),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => _shift(-1),
+            icon: const Icon(Icons.chevron_left_rounded),
+            tooltip: 'Previous month',
+          ),
+          Expanded(
+            child: Center(
+              child: Text(
+                DateFormat('MMMM yyyy').format(_cursor),
+                style: AppText.subhead.copyWith(fontSize: 16),
               ),
             ),
+          ),
+          IconButton(
+            onPressed: _atCurrentMonth ? null : () => _shift(1),
+            icon: const Icon(Icons.chevron_right_rounded),
+            tooltip: 'Next month',
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _summary() {
+    final present = _countOf({'PRESENT', 'CHECKED_OUT', 'MANUAL_OVERRIDE'});
+    final worked = _records.fold<int>(
+      0,
+      (total, record) => total + (record.totalDurationSeconds ?? 0),
+    );
+    return Row(
+      children: [
+        Expanded(
+          child: StatTile(label: 'Present', value: '$present', emphasis: true),
+        ),
+        const SizedBox(width: Insets.md),
+        Expanded(
+          child: StatTile(label: 'Hours', value: _hours(worked)),
+        ),
+        const SizedBox(width: Insets.md),
+        Expanded(
+          child: StatTile(label: 'Absent', value: '${_countOf({'ABSENT'})}'),
+        ),
       ],
     );
   }
 
-  Widget _detail(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 14)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        ],
-      ),
+  String _hours(int seconds) {
+    if (seconds <= 0) return '—';
+    return '${(seconds / 3600).floor()}h';
+  }
+
+  Widget _calendar() {
+    return MonthCalendar(
+      month: _cursor,
+      records: _records,
+      timezone: _timezone,
+      onSelect: _openDay,
+    );
+  }
+
+  /// Monochrome needs a key. Four marks cover everything users see here.
+  Widget _legend() {
+    const entries = {
+      'PRESENT': 'Present',
+      'WFH': 'Home',
+      'HOLIDAY': 'Holiday',
+      'ABSENT': 'Absent',
+    };
+    return Wrap(
+      spacing: Insets.lg,
+      runSpacing: Insets.sm,
+      children: [
+        for (final entry in entries.entries)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              StatusDot(status: entry.key, size: 7),
+              const SizedBox(width: Insets.sm),
+              Text(entry.value, style: AppText.bodySm.copyWith(fontSize: 12)),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _CalendarSkeleton extends StatelessWidget {
+  const _CalendarSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (var i = 0; i < 3; i++) ...[
+              if (i > 0) const SizedBox(width: Insets.md),
+              const Expanded(child: SkeletonBlock(height: 74, radius: Radii.md)),
+            ],
+          ],
+        ),
+        const SizedBox(height: Insets.lg),
+        const SkeletonBlock(height: 280, radius: Radii.lg),
+      ],
     );
   }
 }

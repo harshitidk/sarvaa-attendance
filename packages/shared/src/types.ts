@@ -17,7 +17,6 @@ export interface AppSettings {
   company_timezone: string;
   workday_start: string;
   workday_end: string;
-  absence_cutoff: string;
   exit_grace_seconds: number;
   event_retention_days: number;
 }

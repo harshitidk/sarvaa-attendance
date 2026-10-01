@@ -4,8 +4,9 @@ import '../core/theme.dart';
 import '../models/models.dart';
 import '../services/api.dart';
 import '../services/geofencing_service.dart';
+import '../services/permissions_service.dart';
 import '../state/auth_controller.dart';
-import '../utils/attendance_logic.dart';
+import '../state/theme_controller.dart';
 import '../widgets/common.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -14,20 +15,22 @@ class SettingsScreen extends StatefulWidget {
     required this.api,
     required this.auth,
     required this.geofencing,
+    required this.theme,
   });
 
   final Api api;
   final AuthController auth;
   final GeofencingService geofencing;
+  final ThemeController theme;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  List<LocationEvent> _events = const [];
   String _timezone = 'Asia/Kolkata';
   bool _geofencingActive = false;
+  BackgroundReadiness? _readiness;
 
   @override
   void initState() {
@@ -38,104 +41,166 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final userId = widget.auth.session?.user.id;
     if (userId == null) return;
-    final settings = await widget.api.fetchAppSettings();
-    final events = await widget.api.fetchRecentEvents(userId);
-    if (!mounted) return;
-    setState(() {
-      _timezone = settings.companyTimezone;
-      _events = events;
-      _geofencingActive = widget.geofencing.isRunning;
-    });
+    try {
+      final settings = await widget.api.fetchAppSettings();
+      final readiness = await PermissionsService.check();
+      if (!mounted) return;
+      setState(() {
+        _timezone = settings.companyTimezone;
+        _readiness = readiness;
+        _geofencingActive = widget.geofencing.isRunning && readiness.isReady;
+      });
+    } catch (_) {
+      // Background detection is optional; the rest of the screen still works.
+    }
+  }
+
+  Future<void> _signOut() async {
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Sign out?',
+      message: 'Automatic attendance detection will stop until you sign in again.',
+      confirmLabel: 'Sign out',
+    );
+    if (!confirmed) return;
+    await widget.geofencing.stop();
+    await widget.auth.signOut();
   }
 
   @override
   Widget build(BuildContext context) {
     final profile = widget.auth.profile;
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        SectionCard(
-          title: 'Account',
-          child: Column(
+
+    return Refreshable(
+        onRefresh: _load,
+        child: ListView(
+        padding: AppPadding.page,
+        children: [
+          const PageHeader(title: 'Settings'),
+          _identity(profile),
+          const SizedBox(height: Insets.xl),
+          GroupedList(
+            title: 'Account',
             children: [
-              _row('Name', profile?.name ?? '—'),
-              _row('Employee ID', profile?.employeeId ?? '—'),
-              _row('Email', profile?.email ?? '—'),
-              _row('Department', profile?.department ?? '—'),
+              AppRow(
+                title: 'Employee ID',
+                trailing: Text(
+                  profile?.employeeId.isNotEmpty == true
+                      ? profile!.employeeId
+                      : '—',
+                  style: AppText.numeral.copyWith(fontSize: 14),
+                ),
+              ),
+              AppRow(
+                title: 'Email',
+                trailing: Flexible(
+                  child: Text(
+                    profile?.email ?? '—',
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.bodySm.copyWith(color: AppColors.ink2),
+                  ),
+                ),
+              ),
+              AppRow(
+                title: 'Department',
+                trailing: Text(
+                  profile?.department ?? '—',
+                  style: AppText.bodySm.copyWith(color: AppColors.ink2),
+                ),
+              ),
+              AppRow(
+                title: 'Timezone',
+                trailing: Text(
+                  _timezone,
+                  style: AppText.bodySm.copyWith(color: AppColors.ink2),
+                ),
+              ),
             ],
           ),
-        ),
-        const SizedBox(height: 16),
-        SectionCard(
-          title: 'Background detection',
-          child: Text(
-            _geofencingActive
-                ? 'Automatic detection is active. Attendance is recorded on geofence transitions.'
-                : 'Automatic detection is not running. Use the manual check-in/out buttons on Today.',
-            style: const TextStyle(color: AppColors.muted, fontSize: 13),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SectionCard(
-          title: 'Recent location events',
-          child: _events.isEmpty
-              ? const Text(
-                  'No events recorded yet.',
-                  style: TextStyle(color: AppColors.muted, fontSize: 13),
-                )
-              : Column(
-                  children: _events
-                      .map(
-                        (event) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                event.eventType,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                '${formatTime(event.occurredAt, _timezone)}'
-                                '${event.accuracyMeters != null ? ' · ±${event.accuracyMeters!.round()}m' : ''}',
-                                style: const TextStyle(color: AppColors.muted, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-        ),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: () async {
-            await widget.geofencing.stop();
-            await widget.auth.signOut();
-          },
-          icon: const Icon(Icons.logout, color: AppColors.danger),
-          label: const Text('Sign out', style: TextStyle(color: AppColors.danger)),
-        ),
-      ],
-    );
-  }
-
-  Widget _row(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 14)),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-            ),
+          const SizedBox(height: Insets.xl),
+          AppearanceCard(controller: widget.theme),
+          const SizedBox(height: Insets.xl),
+          _detection(),
+          const SizedBox(height: Insets.xxl),
+          OutlinedButton.icon(
+            onPressed: _signOut,
+            icon: const Icon(Icons.logout_rounded, size: 18),
+            label: const Text('Sign out'),
           ),
         ],
       ),
     );
   }
+
+  Widget _identity(UserProfile? profile) {
+    final name = profile?.name ?? '';
+    return Row(
+      children: [
+        InitialsAvatar(name: name, size: 56, inverted: true),
+        const SizedBox(width: Insets.lg),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name.isEmpty ? 'Employee' : name,
+                style: AppText.title.copyWith(fontSize: 20),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                profile?.role == 'admin' ? 'Administrator' : 'Employee',
+                style: AppText.bodySm,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _detection() {
+    return SectionCard(
+      title: 'Background detection',
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: Insets.sm, vertical: 3),
+        decoration: BoxDecoration(
+          color: _geofencingActive ? AppColors.ink : AppColors.sunk,
+          borderRadius: BorderRadius.circular(Radii.pill),
+          border: Border.all(
+            color: _geofencingActive ? AppColors.ink : AppColors.hairline,
+          ),
+        ),
+        child: Text(
+          _geofencingActive ? 'ON' : 'OFF',
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: _geofencingActive ? AppColors.onInk : AppColors.muted,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _readiness?.message ??
+                'Record your attendance from Today while this is checked.',
+            style: AppText.bodySm,
+          ),
+          if (_readiness != null && !_readiness!.isReady) ...[
+            const SizedBox(height: Insets.md),
+            OutlinedButton(
+              onPressed: () async {
+                await PermissionsService.openSettings();
+                await _load();
+              },
+              child: const Text('Open settings'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
 }

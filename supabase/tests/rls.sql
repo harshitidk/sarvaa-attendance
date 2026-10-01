@@ -41,12 +41,6 @@ begin
   end if;
 
   begin
-    perform public.finalize_absences(current_date);
-    raise exception 'FAIL RLS employee finalized absences';
-  exception when insufficient_privilege then null;
-  end;
-
-  begin
     perform public.apply_manual_correction(
       (select id from public.attendance limit 1), 'PRESENT', null, null, 'nope');
     raise exception 'FAIL RLS employee corrected attendance';

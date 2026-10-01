@@ -8,15 +8,18 @@ import 'services/api.dart';
 import 'services/geofencing_service.dart';
 import 'services/notification_service.dart';
 import 'state/auth_controller.dart';
+import 'state/theme_controller.dart';
 import 'utils/attendance_logic.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   initializeTimezones();
+  // Before any UI: restoring this later would flash the light theme first.
+  final theme = await ThemeController.load();
   await NotificationService.init();
 
   if (!AppConfig.isConfigured) {
-    runApp(const ConfigMissingApp());
+    runApp(ConfigMissingApp(theme: theme));
     return;
   }
 
@@ -36,5 +39,6 @@ Future<void> main() async {
     adminApi: adminApi,
     auth: auth,
     geofencing: geofencing,
+    theme: theme,
   ));
 }

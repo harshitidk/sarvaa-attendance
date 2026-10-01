@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 import '../state/auth_controller.dart';
+import '../widgets/common.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.auth});
@@ -15,17 +16,24 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _passwordFocus = FocusNode();
   bool _loading = false;
+  bool _obscure = true;
   String? _error;
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    if (_email.text.trim().isEmpty || _password.text.isEmpty) {
+      setState(() => _error = 'Enter your work email and password.');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -42,72 +50,101 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Geofenced Attendance',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Your attendance is recorded automatically when you enter or leave your workplace.',
-                    style: TextStyle(color: AppColors.muted, height: 1.4),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text('Work email', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _email,
-                    keyboardType: TextInputType.emailAddress,
-                    autocorrect: false,
-                    decoration: const InputDecoration(hintText: 'you@company.com'),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Password', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _password,
-                    obscureText: true,
-                    decoration: const InputDecoration(hintText: '••••••••'),
-                    onSubmitted: (_) => _submit(),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!, style: const TextStyle(color: AppColors.danger)),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: Insets.gutter),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Spacer(flex: 2),
+                    // Wordmark: an ink square, the same gesture as the "present"
+                    // status. The brand and the system share one language.
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        height: 44,
+                        width: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.ink,
+                          borderRadius: BorderRadius.circular(Radii.md),
+                        ),
+                        child: Icon(
+                          Icons.location_on,
+                          color: AppColors.onInk,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: Insets.xxl),
+                    Text(
+                      'Attendance',
+                      style: AppText.title.copyWith(fontSize: 34),
+                    ),
+                    const SizedBox(height: Insets.sm),
+                    Text(
+                      'Your hours are recorded automatically as you arrive at and '
+                      'leave the workplace.',
+                      style: AppText.body,
+                    ),
+                    const SizedBox(height: Insets.huge),
+                    const FieldLabel('Work email'),
+                    TextField(
+                      controller: _email,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      onSubmitted: (_) => _passwordFocus.requestFocus(),
+                      decoration: const InputDecoration(
+                        hintText: 'you@company.com',
+                      ),
+                    ),
+                    const SizedBox(height: Insets.xl),
+                    const FieldLabel('Password'),
+                    TextField(
+                      controller: _password,
+                      focusNode: _passwordFocus,
+                      obscureText: _obscure,
+                      textInputAction: TextInputAction.go,
+                      onSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        hintText: '••••••••',
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                          tooltip: _obscure ? 'Show password' : 'Hide password',
+                          icon: Icon(
+                            _obscure
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: Insets.lg),
+                      Notice(_error!, tone: NoticeTone.alert),
+                    ],
+                    const SizedBox(height: Insets.xxl),
+                    BusyButton(
+                      label: 'Sign in',
+                      busy: _loading,
+                      onPressed: _submit,
+                    ),
+                    const Spacer(flex: 3),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Insets.lg),
+                      child: Text(
+                        'You will be asked for location permission after signing in.',
+                        textAlign: TextAlign.center,
+                        style: AppText.bodySm.copyWith(fontSize: 12),
+                      ),
+                    ),
                   ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _loading ? null : _submit,
-                    child: _loading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.primaryForeground,
-                            ),
-                          )
-                        : const Text('Sign in'),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'You will be asked to grant location permission after signing in.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.muted, fontSize: 12),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

@@ -49,7 +49,6 @@ export const DEFAULT_SETTINGS = {
   company_timezone: "Asia/Kolkata",
   workday_start: "09:00",
   workday_end: "18:00",
-  absence_cutoff: "12:00",
   exit_grace_seconds: 300,
   event_retention_days: 180,
 } as const;

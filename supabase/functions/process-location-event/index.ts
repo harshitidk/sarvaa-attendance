@@ -16,6 +16,8 @@ interface IncomingEvent {
   event_type: "ENTER" | "EXIT";
   occurred_at: string;
   accuracy_meters?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
   dedupe_key?: string | null;
   metadata?: Record<string, unknown>;
 }
@@ -75,6 +77,8 @@ Deno.serve(async (req) => {
       p_dedupe_key: event.dedupe_key ?? null,
       p_source: "OS geofence",
       p_metadata: event.metadata ?? {},
+      p_latitude: event.latitude ?? null,
+      p_longitude: event.longitude ?? null,
     });
 
     if (error) {

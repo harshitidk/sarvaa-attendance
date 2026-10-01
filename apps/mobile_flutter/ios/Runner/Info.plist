@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Geofenced Attendance</string>
+	<string>Sarvaa Analytics</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>geoattend</string>
+	<string>Sarvaa Analytics</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -27,11 +27,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Geofenced Attendance uses your location to confirm you are at your workplace.</string>
+	<string>Sarvaa Analytics uses your location to confirm you are at your workplace.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Geofenced Attendance needs background location to record automatic check-in and check-out.</string>
+	<string>Sarvaa Analytics needs background location to record automatic check-in and check-out.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Geofenced Attendance needs background location to record automatic check-in and check-out.</string>
+	<string>Sarvaa Analytics needs background location to record automatic check-in and check-out.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

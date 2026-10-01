@@ -94,7 +94,7 @@ export function CheckInPanel({
   );
 
   const recordEvent = useCallback(
-    async (eventType: "ENTER" | "EXIT", accuracy: number, note: string) => {
+    async (eventType: "ENTER" | "EXIT", accuracy: number, note: string, lat: number, lng: number) => {
       if (!geofence) return;
       setError(null);
       const nowIso = new Date().toISOString();
@@ -110,6 +110,8 @@ export function CheckInPanel({
         p_event_type: eventType,
         p_occurred_at: nowIso,
         p_accuracy_meters: accuracy,
+        p_latitude: lat,
+        p_longitude: lng,
         p_dedupe_key: `web:${geofence.id}:${eventType}:${crypto.randomUUID()}`,
         p_source: "Browser geolocation",
         p_metadata: { platform: "web", note },
@@ -144,7 +146,7 @@ export function CheckInPanel({
           setBusy(false);
           return;
         }
-        await recordEvent("ENTER", position.coords.accuracy, "explicit check-in");
+        await recordEvent("ENTER", position.coords.accuracy, "explicit check-in", position.coords.latitude, position.coords.longitude);
         setBusy(false);
       },
       (err) => {
@@ -220,7 +222,7 @@ export function CheckInPanel({
         }
         if (result.isInside !== lastInside.current) {
           lastInside.current = result.isInside;
-          await recordEvent(result.isInside ? "ENTER" : "EXIT", position.coords.accuracy, "auto transition");
+          await recordEvent(result.isInside ? "ENTER" : "EXIT", position.coords.accuracy, "auto transition", position.coords.latitude, position.coords.longitude);
         }
       },
       (err) => {

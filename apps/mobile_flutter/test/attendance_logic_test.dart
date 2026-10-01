@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geoattend/models/models.dart';
 import 'package:geoattend/utils/attendance_logic.dart';
 
 void main() {
@@ -105,6 +106,87 @@ void main() {
       expect(statusLabel('CHECKED_OUT'), 'Checked out');
       expect(statusLabel('WFH'), 'Work from home');
       expect(statusLabel(null), 'Not checked in');
+    });
+  });
+
+  group('work summary edit window', () {
+    final now = DateTime.utc(2026, 6, 10, 12, 0);
+
+    test('nothing to edit before a summary exists', () {
+      expect(canEditSummary(null, now), isFalse);
+      expect(summaryEditRemaining(null, now), Duration.zero);
+    });
+
+    test('open inside the window, closed after the grace', () {
+      expect(canEditSummary(now.subtract(const Duration(minutes: 5)), now), isTrue);
+      expect(canEditSummary(now.subtract(const Duration(minutes: 39)), now), isTrue);
+      expect(canEditSummary(now.subtract(const Duration(minutes: 41)), now), isFalse);
+    });
+
+    test('remaining time counts down from the hard lock', () {
+      final remaining =
+          summaryEditRemaining(now.subtract(const Duration(minutes: 5)), now);
+      expect(remaining, const Duration(minutes: 35));
+      expect(
+        summaryEditRemaining(now.subtract(const Duration(minutes: 50)), now),
+        Duration.zero,
+      );
+    });
+  });
+
+  group('quarterBounds', () {
+    test('maps months to calendar quarters', () {
+      expect(quarterBounds(DateTime(2026, 2, 15)).label, 'Q1 2026');
+      expect(quarterBounds(DateTime(2026, 2, 15)).from, '2026-01-01');
+      expect(quarterBounds(DateTime(2026, 2, 15)).to, '2026-03-31');
+      expect(quarterBounds(DateTime(2026, 11, 5)).label, 'Q4 2026');
+      expect(quarterBounds(DateTime(2026, 11, 5)).from, '2026-10-01');
+      expect(quarterBounds(DateTime(2026, 11, 5)).to, '2026-12-31');
+    });
+  });
+
+  group('QuarterSummary', () {
+    Attendance record(String status, {int? seconds}) => Attendance(
+          id: 'a',
+          userId: 'u',
+          date: '2026-06-10',
+          status: status,
+          source: 'automatic',
+          totalDurationSeconds: seconds,
+        );
+
+    test('counts each status and sums work hours', () {
+      final summary = QuarterSummary.fromRecords([
+        record('PRESENT', seconds: 8 * 3600),
+        record('CHECKED_OUT', seconds: 7 * 3600 + 1800),
+        record('WFH', seconds: 6 * 3600),
+        record('LEAVE'),
+        record('LEAVE'),
+        record('ABSENT'),
+        record('HOLIDAY'),
+      ]);
+      expect(summary.present, 2);
+      expect(summary.wfh, 1);
+      expect(summary.leaves, 2);
+      expect(summary.absent, 1);
+      expect(summary.holidays, 1);
+      expect(summary.workHours, 21);
+    });
+
+    test('an empty quarter is all zeroes', () {
+      final summary = QuarterSummary.fromRecords(const []);
+      expect(summary.leaves, 0);
+      expect(summary.workHours, 0);
+    });
+  });
+
+  group('LeaveType', () {
+    test('round-trips its stored values', () {
+      expect(LeaveType.fromValue('sick'), LeaveType.sick);
+      expect(LeaveType.fromValue('paid'), LeaveType.paid);
+      expect(LeaveType.fromValue('unpaid'), LeaveType.unpaid);
+      expect(LeaveType.fromValue('nonsense'), LeaveType.sick);
+      expect(LeaveType.fromValue(null), LeaveType.sick);
     });
   });
 }

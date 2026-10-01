@@ -26,7 +26,7 @@ export default async function AttendancePage({
   const { data, error } = await supabase
     .from("attendance")
     .select(
-      "id, user_id, date, status, check_in_at, check_out_at, total_duration_seconds, work_summary, source, created_at, updated_at, user:users(name, employee_id, department)",
+      "id, user_id, date, status, check_in_at, check_out_at, total_duration_seconds, work_summary, source, created_at, updated_at, user:users(name, employee_id, department), sessions:attendance_sessions(id, check_in_at, check_out_at)",
     )
     .gte("date", from)
     .lte("date", to)

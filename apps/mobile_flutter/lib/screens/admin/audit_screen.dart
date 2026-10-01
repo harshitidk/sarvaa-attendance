@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
 import '../../models/admin_models.dart';
 import '../../services/admin_api.dart';
+import '../../widgets/common.dart';
 
 class AuditScreen extends StatefulWidget {
   const AuditScreen({super.key, required this.api});
@@ -45,31 +47,80 @@ class _AuditScreenState extends State<AuditScreen> {
     }
   }
 
+  /// Groups entries under a day heading so a long log stays scannable.
+  Map<String, List<AuditRow>> get _byDay {
+    final grouped = <String, List<AuditRow>>{};
+    for (final row in _rows) {
+      final key = DateFormat('EEEE, d MMMM y').format(row.createdAt.toLocal());
+      grouped.putIfAbsent(key, () => []).add(row);
+    }
+    return grouped;
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(child: Text(_error!));
-    if (_rows.isEmpty) {
-      return const Center(
-        child: Text('No audit entries yet.', style: TextStyle(color: AppColors.muted)),
-      );
-    }
+    final grouped = _byDay;
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(12),
-        itemCount: _rows.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final row = _rows[index];
-          return ListTile(
-            leading: const Icon(Icons.history),
-            title: Text('${row.action} · ${row.entityType}'),
-            subtitle: Text(row.createdAt.toLocal().toString()),
-          );
-        },
-      ),
+    return ScreenState(
+      loading: _loading,
+      error: _error,
+      onRetry: _load,
+      child: _rows.isEmpty
+          ? const EmptyState(
+              icon: Icons.verified_user_outlined,
+              title: 'Nothing logged yet',
+              message: 'Administrative actions are recorded here automatically.',
+            )
+          : Refreshable(
+        onRefresh: _load,
+        child: ListView(
+                padding: AppPadding.page,
+                children: [
+                  for (final entry in grouped.entries) ...[
+                    GroupedList(
+                      title: entry.key,
+                      children: [
+                        for (final row in entry.value)
+                          AppRow(
+                            leading: IconTile(_iconFor(row.action), size: 32),
+                            title: _humanise(row.action),
+                            subtitle: row.entityType,
+                            trailing: Text(
+                              DateFormat('h:mm a').format(row.createdAt.toLocal()),
+                              style: AppText.numeral.copyWith(
+                                fontSize: 12.5,
+                                color: AppColors.muted,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: Insets.lg),
+                  ],
+                ],
+              ),
+            ),
     );
+  }
+
+  IconData _iconFor(String action) {
+    final value = action.toLowerCase();
+    if (value.contains('delete') || value.contains('remove')) {
+      return Icons.delete_outline_rounded;
+    }
+    if (value.contains('create') || value.contains('insert')) {
+      return Icons.add_rounded;
+    }
+    if (value.contains('update') || value.contains('correct')) {
+      return Icons.edit_outlined;
+    }
+    return Icons.bolt_outlined;
+  }
+
+  String _humanise(String action) {
+    if (action.isEmpty) return 'Action';
+    final words = action.replaceAll('_', ' ').toLowerCase();
+    return words[0].toUpperCase() + words.substring(1);
   }
 }

@@ -187,17 +187,3 @@ export function isDuplicateEvent(existingDedupeKeys: string[], event: LocationEv
   if (!event.dedupe_key) return false;
   return existingDedupeKeys.includes(event.dedupe_key);
 }
-
-/** Absence is only assigned after the configured cutoff (PRD §22). */
-export function shouldMarkAbsent(
-  now: Date,
-  settings: Pick<AppSettings, "company_timezone" | "absence_cutoff">,
-): boolean {
-  const local = new Intl.DateTimeFormat("en-GB", {
-    timeZone: settings.company_timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(now);
-  return local >= settings.absence_cutoff;
-}

@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BarChart3,
   CalendarDays,
   FileDown,
   History,
   LayoutDashboard,
+  LogIn,
   LogOut,
   MapPin,
   Settings,
@@ -19,7 +21,9 @@ import { createClient } from "@/lib/supabase/client";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/employee", label: "My attendance", icon: LogIn },
   { href: "/attendance", label: "Attendance", icon: CalendarDays },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/employees", label: "Employees", icon: Users },
   { href: "/geofences", label: "Geofences", icon: MapPin },
   { href: "/calendar", label: "Holidays & WFH", icon: CalendarDays },

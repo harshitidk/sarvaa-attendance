@@ -164,6 +164,8 @@ export default function HomeScreen() {
         eventType: "ENTER",
         occurredAt: nowIso,
         accuracyMeters: accuracy,
+        latitude: latitude,
+        longitude: longitude,
         dedupeKey: `mobile:${target.id}:ENTER:${Math.floor(Date.now() / 60000)}`,
         source: "Mobile geolocation",
         metadata: { platform: "expo-location", note: "explicit check-in" },

@@ -13,7 +13,7 @@ class AdminApi {
   Future<List<AttendanceRow>> fetchAttendanceForDate(String date) async {
     final rows = await _client
         .from('attendance')
-        .select('*, user:users(name, employee_id, department)')
+        .select('*, user:users(name, employee_id, department), sessions:attendance_sessions(*)')
         .eq('date', date)
         .order('created_at');
     return (rows as List)
@@ -25,7 +25,25 @@ class AdminApi {
   Future<List<AttendanceRow>> fetchAttendanceRange(String from, String to) async {
     final rows = await _client
         .from('attendance')
-        .select('*, user:users(name, employee_id, department)')
+        .select('*, user:users(name, employee_id, department), sessions:attendance_sessions(*)')
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', ascending: false);
+    return (rows as List)
+        .map((row) => AttendanceRow.fromMap(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// One employee's attendance across a range, newest first, for their profile.
+  Future<List<AttendanceRow>> fetchEmployeeAttendance(
+    String userId,
+    String from,
+    String to,
+  ) async {
+    final rows = await _client
+        .from('attendance')
+        .select('*, user:users(name, employee_id, department), sessions:attendance_sessions(*)')
+        .eq('user_id', userId)
         .gte('date', from)
         .lte('date', to)
         .order('date', ascending: false);
@@ -65,6 +83,7 @@ class AdminApi {
     String? locationId,
     String? department,
     String? name,
+    bool? attendanceEnabled,
   }) async {
     final patch = <String, dynamic>{};
     if (role != null) patch['role'] = role;
@@ -72,6 +91,7 @@ class AdminApi {
     if (locationId != null) patch['location_id'] = locationId;
     if (department != null) patch['department'] = department;
     if (name != null) patch['name'] = name;
+    if (attendanceEnabled != null) patch['attendance_enabled'] = attendanceEnabled;
     if (patch.isEmpty) return;
     await _client.from('users').update(patch).eq('id', id);
   }
@@ -148,7 +168,7 @@ class AdminApi {
   Future<List<WfhRow>> fetchWfh() async {
     final rows = await _client
         .from('wfh_assignments')
-        .select('*, user:users(name)')
+        .select('*, user:users!wfh_assignments_user_id_fkey(name)')
         .order('date', ascending: false);
     return (rows as List)
         .map((row) => WfhRow.fromMap(row as Map<String, dynamic>))
@@ -169,6 +189,90 @@ class AdminApi {
 
   Future<void> deleteWfh(String id) async {
     await _client.from('wfh_assignments').delete().eq('id', id);
+  }
+
+  // ------------------------------------------------------------ wfh requests
+  /// Requests awaiting a decision first, then recently decided ones.
+  Future<List<WfhRequestRow>> fetchWfhRequests({bool pendingOnly = false}) async {
+    var query = _client
+        .from('wfh_requests')
+        .select('*, user:users!wfh_requests_user_id_fkey(name, employee_id)');
+    if (pendingOnly) query = query.eq('status', 'pending');
+    final rows = await query.order('date', ascending: false).limit(200);
+    return (rows as List)
+        .map((row) => WfhRequestRow.fromMap(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Approving materialises the WFH day the attendance engine reads;
+  /// rejecting leaves nothing behind. Both are written to the audit log.
+  Future<void> reviewWfhRequest({
+    required String requestId,
+    required bool approve,
+    String? note,
+  }) async {
+    await _client.rpc('review_wfh_request', params: {
+      'p_request_id': requestId,
+      'p_approve': approve,
+      'p_note': (note == null || note.trim().isEmpty) ? null : note.trim(),
+    });
+  }
+
+  // ---------------------------------------------------------- leave requests
+  /// Requests awaiting a decision first, then recently decided ones.
+  Future<List<LeaveRequestRow>> fetchLeaveRequests({bool pendingOnly = false}) async {
+    var query = _client
+        .from('leave_requests')
+        .select('*, user:users!leave_requests_user_id_fkey(name, employee_id)');
+    if (pendingOnly) query = query.eq('status', 'pending');
+    final rows = await query.order('date', ascending: false).limit(200);
+    return (rows as List)
+        .map((row) => LeaveRequestRow.fromMap(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Approving writes the LEAVE attendance day the absence finalizer reads;
+  /// rejecting leaves nothing behind. Both are written to the audit log.
+  Future<void> reviewLeaveRequest({
+    required String requestId,
+    required bool approve,
+    String? note,
+  }) async {
+    await _client.rpc('review_leave_request', params: {
+      'p_request_id': requestId,
+      'p_approve': approve,
+      'p_note': (note == null || note.trim().isEmpty) ? null : note.trim(),
+    });
+  }
+
+  // -------------------------------------------------------- company wfh days
+  Future<List<CompanyWfhDay>> fetchCompanyWfhDays() async {
+    final rows = await _client
+        .from('company_wfh_days')
+        .select()
+        .order('date', ascending: false);
+    return (rows as List)
+        .map((row) => CompanyWfhDay.fromMap(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Marks a date as work-from-home for the whole active roster, so nobody
+  /// needs to check in.
+  Future<void> setCompanyWfhDay({
+    required String date,
+    String? note,
+    String? locationId,
+  }) async {
+    await _client.rpc('set_company_wfh_day', params: {
+      'p_date': date,
+      'p_note': (note == null || note.trim().isEmpty) ? null : note.trim(),
+      'p_location_id': locationId,
+    });
+  }
+
+  /// Removes the day and only the assignments it created.
+  Future<void> clearCompanyWfhDay(String dayId) async {
+    await _client.rpc('clear_company_wfh_day', params: {'p_day_id': dayId});
   }
 
   // -------------------------------------------------------------- corrections
@@ -206,7 +310,6 @@ class AdminApi {
     required String companyTimezone,
     required String workdayStart,
     required String workdayEnd,
-    required String absenceCutoff,
     required int exitGraceSeconds,
     required int eventRetentionDays,
     required List<int> workingDays,
@@ -215,7 +318,6 @@ class AdminApi {
       'company_timezone': companyTimezone,
       'workday_start': workdayStart,
       'workday_end': workdayEnd,
-      'absence_cutoff': absenceCutoff,
       'exit_grace_seconds': exitGraceSeconds,
       'event_retention_days': eventRetentionDays,
       'working_days': workingDays,

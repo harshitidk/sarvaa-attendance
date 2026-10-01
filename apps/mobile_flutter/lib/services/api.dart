@@ -30,7 +30,7 @@ class Api {
   Future<Attendance?> fetchAttendanceForDate(String userId, String date) async {
     final data = await _client
         .from('attendance')
-        .select()
+        .select('*, sessions:attendance_sessions(*)')
         .eq('user_id', userId)
         .eq('date', date)
         .maybeSingle();
@@ -58,15 +58,21 @@ class Api {
         .toList();
   }
 
-  Future<List<LocationEvent>> fetchRecentEvents(String userId, {int limit = 20}) async {
+  /// Attendance rows between two ISO dates, inclusive. Used for quarter counts.
+  Future<List<Attendance>> fetchAttendanceRange(
+    String userId,
+    String from,
+    String to,
+  ) async {
     final rows = await _client
-        .from('location_events')
-        .select('id, event_type, occurred_at, accuracy_meters')
+        .from('attendance')
+        .select()
         .eq('user_id', userId)
-        .order('occurred_at', ascending: false)
-        .limit(limit);
+        .gte('date', from)
+        .lte('date', to)
+        .order('date');
     return (rows as List)
-        .map((row) => LocationEvent.fromMap(row as Map<String, dynamic>))
+        .map((row) => Attendance.fromMap(row as Map<String, dynamic>))
         .toList();
   }
 
@@ -75,6 +81,8 @@ class Api {
     required String eventType,
     required DateTime occurredAt,
     double? accuracyMeters,
+    double? latitude,
+    double? longitude,
     String? dedupeKey,
     String source = 'Mobile geolocation',
     Map<String, dynamic>? metadata,
@@ -87,10 +95,101 @@ class Api {
       'p_event_type': eventType,
       'p_occurred_at': iso,
       'p_accuracy_meters': accuracyMeters,
+      'p_latitude': latitude,
+      'p_longitude': longitude,
       'p_dedupe_key': key,
       'p_source': source,
       'p_metadata': metadata ?? const {'platform': 'flutter'},
     });
+  }
+
+  /// This employee's own WFH requests, newest first.
+  Future<List<WfhRequest>> fetchMyWfhRequests(String userId, {int limit = 20}) async {
+    final rows = await _client
+        .from('wfh_requests')
+        .select('id, date, status, reason, decision_note, reviewed_at')
+        .eq('user_id', userId)
+        .order('date', ascending: false)
+        .limit(limit);
+    return (rows as List)
+        .map((row) => WfhRequest.fromMap(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Files a request. The database refuses a past date, another user's id, or
+  /// any status other than pending — this cannot self-approve.
+  Future<WfhRequest> requestWfh({
+    required String userId,
+    required String date,
+    String? reason,
+  }) async {
+    final data = await _client
+        .from('wfh_requests')
+        .insert({
+          'user_id': userId,
+          'date': date,
+          'reason': (reason == null || reason.trim().isEmpty) ? null : reason.trim(),
+        })
+        .select()
+        .single();
+    return WfhRequest.fromMap(data);
+  }
+
+  /// Withdraws a request that has not been decided yet.
+  Future<void> cancelWfhRequest(String requestId) async {
+    await _client
+        .from('wfh_requests')
+        .update({'status': 'cancelled'})
+        .eq('id', requestId)
+        .eq('status', 'pending');
+  }
+
+  // ------------------------------------------------------------------- leave
+
+  /// This employee's own leave requests, newest first.
+  Future<List<LeaveRequest>> fetchMyLeaveRequests(
+    String userId, {
+    int limit = 20,
+  }) async {
+    final rows = await _client
+        .from('leave_requests')
+        .select('id, date, leave_type, status, reason, decision_note, reviewed_at')
+        .eq('user_id', userId)
+        .order('date', ascending: false)
+        .limit(limit);
+    return (rows as List)
+        .map((row) => LeaveRequest.fromMap(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Files a leave request. A reason is mandatory; the database refuses a past
+  /// date, another user's id, or any status other than pending.
+  Future<LeaveRequest> requestLeave({
+    required String userId,
+    required String date,
+    required LeaveType leaveType,
+    required String reason,
+  }) async {
+    final data = await _client
+        .from('leave_requests')
+        .insert({
+          'user_id': userId,
+          'date': date,
+          'leave_type': leaveType.value,
+          'reason': reason.trim(),
+        })
+        .select()
+        .single();
+    return LeaveRequest.fromMap(data);
+  }
+
+  /// Withdraws a leave request that has not been decided yet.
+  Future<void> cancelLeaveRequest(String requestId) async {
+    await _client
+        .from('leave_requests')
+        .update({'status': 'cancelled'})
+        .eq('id', requestId)
+        .eq('status', 'pending');
   }
 
   Future<Attendance> employeeCheckOut({
@@ -109,5 +208,14 @@ class Api {
     });
     final map = (data is List ? data.first : data) as Map<String, dynamic>;
     return Attendance.fromMap(map);
+  }
+
+  /// Whether the signed-in user tracks their own attendance (admins opt in).
+  Future<bool> setMyAttendanceEnabled(bool enabled) async {
+    final data = await _client.rpc(
+      'set_my_attendance_enabled',
+      params: {'p_enabled': enabled},
+    );
+    return data == true;
   }
 }

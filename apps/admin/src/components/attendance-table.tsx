@@ -13,6 +13,7 @@ import { StatusBadge } from "@/components/status-badge";
 
 export type AttendanceRow = Attendance & {
   user: Pick<User, "name" | "employee_id" | "department"> | null;
+  sessions?: { id: string; check_in_at: string; check_out_at: string | null }[];
 };
 
 function time(value: string | null) {
@@ -80,6 +81,7 @@ export function AttendanceTable({ rows }: { rows: AttendanceRow[] }) {
               <TableHead>Check-in</TableHead>
               <TableHead>Check-out</TableHead>
               <TableHead>Duration</TableHead>
+              <TableHead>Visits</TableHead>
               <TableHead>Summary</TableHead>
               <TableHead>Source</TableHead>
               <TableHead className="text-right">Action</TableHead>
@@ -88,7 +90,7 @@ export function AttendanceTable({ rows }: { rows: AttendanceRow[] }) {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                   No attendance records.
                 </TableCell>
               </TableRow>
@@ -108,6 +110,9 @@ export function AttendanceTable({ rows }: { rows: AttendanceRow[] }) {
                   <TableCell className="tabular-nums">{time(row.check_out_at)}</TableCell>
                   <TableCell className="tabular-nums">
                     {formatDuration(row.total_duration_seconds)}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {row.sessions && row.sessions.length > 0 ? row.sessions.length : "—"}
                   </TableCell>
                   <TableCell className="max-w-[220px] truncate text-muted-foreground" title={row.work_summary ?? ""}>
                     {row.work_summary ?? "—"}

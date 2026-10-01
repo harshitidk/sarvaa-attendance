@@ -42,3 +42,8 @@ yarn-debug.log*
 
 # Sentry / misc
 .sentryclirc
+
+# Android release signing — never commit these
+**/android/key.properties
+**/*.jks
+**/*.keystore
